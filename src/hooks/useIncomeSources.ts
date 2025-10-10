@@ -1,22 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { IncomeSource, IncomeAnalysis } from '@/types/incomeSource';
 import { Transaction } from '@/types/transaction';
 
 const STORAGE_KEY = 'income_sources';
 
-export const useIncomeSources = () => {
-  const [incomeSources, setIncomeSourcesState] = useState<IncomeSource[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
+const loadStoredIncomeSources = (): IncomeSource[] => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
       return [];
     }
-  });
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const sources = JSON.parse(stored);
+      console.log('Loaded income sources:', sources);
+      return sources;
+    } else {
+      // No stored sources found - create and save empty array as default
+      console.log('No income sources found, creating empty defaults');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      return [];
+    }
+  } catch (error) {
+    console.error('Error loading income sources:', error);
+    return [];
+  }
+};
 
-  const setIncomeSources = (sources: IncomeSource[]) => {
-    setIncomeSourcesState(sources);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sources));
+export const useIncomeSources = () => {
+  const [incomeSources, setIncomeSourcesState] = useState<IncomeSource[]>(loadStoredIncomeSources());
+  const [isLoaded, setIsLoaded] = useState(true);
+
+  const persistIncomeSources = (sources: IncomeSource[]) => {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) {
+        return;
+      }
+      console.log('Saving income sources:', sources);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sources));
+    } catch (error) {
+      console.error('Error saving income sources:', error);
+    }
   };
 
   const addIncomeSource = (source: Omit<IncomeSource, 'id'>) => {
@@ -25,24 +48,33 @@ export const useIncomeSources = () => {
       frequency: source.frequency || 'monthly', // Default to monthly if not specified
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
     };
-    const updated = [...incomeSources, newSource];
-    setIncomeSources(updated);
+    setIncomeSourcesState(prev => {
+      const updated = [...prev, newSource];
+      persistIncomeSources(updated);
+      return updated;
+    });
     return newSource.id;
   };
 
   const updateIncomeSource = (id: string, updates: Partial<IncomeSource>) => {
-    const updated = incomeSources.map(source => 
-      source.id === id ? { ...source, ...updates } : source
-    );
-    setIncomeSources(updated);
+    setIncomeSourcesState(prev => {
+      const updated = prev.map(source =>
+        source.id === id ? { ...source, ...updates } : source
+      );
+      persistIncomeSources(updated);
+      return updated;
+    });
   };
 
   const deleteIncomeSource = (id: string) => {
-    const updated = incomeSources.filter(source => source.id !== id);
-    setIncomeSources(updated);
+    setIncomeSourcesState(prev => {
+      const updated = prev.filter(source => source.id !== id);
+      persistIncomeSources(updated);
+      return updated;
+    });
   };
 
-  const analyzeIncome = (transactions: Transaction[]): IncomeAnalysis => {
+  const analyzeIncome = useCallback((transactions: Transaction[]): IncomeAnalysis => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
@@ -123,7 +155,7 @@ export const useIncomeSources = () => {
       totalIncome: workIncome + otherIncome,
       incomeBreakdown
     };
-  };
+  }, [incomeSources]);
 
   const getMonthlyAmountFromSource = (source: IncomeSource): number => {
     if (!source.expectedAmount) return 0;
@@ -148,10 +180,15 @@ export const useIncomeSources = () => {
     }
   };
 
-  const getTotalExpectedIncome = (): number => {
+  const getTotalExpectedIncome = useCallback((): number => {
     return incomeSources
       .filter(source => source.isActive && source.expectedAmount)
       .reduce((sum, source) => sum + getMonthlyAmountFromSource(source), 0);
+  }, [incomeSources]);
+
+  const setIncomeSources = (sources: IncomeSource[]) => {
+    setIncomeSourcesState(sources);
+    persistIncomeSources(sources);
   };
 
   return {
@@ -162,6 +199,7 @@ export const useIncomeSources = () => {
     deleteIncomeSource,
     analyzeIncome,
     getTotalExpectedIncome,
-    getMonthlyAmountFromSource
+    getMonthlyAmountFromSource,
+    isLoaded
   };
 };

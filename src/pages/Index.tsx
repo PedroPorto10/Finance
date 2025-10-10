@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Table2, Wallet, TrendingUp, TrendingDown, DollarSign, Settings } from 'lucide-react';
+import { Table2, Wallet, TrendingUp, TrendingDown, DollarSign, Settings, Target, Bell, Shield, BarChart3, CreditCard, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useInvestmentPreferences } from '@/hooks/useInvestmentPreferences';
 import { useMonthlyIncome } from '@/hooks/useMonthlyIncome';
 import { useIncomeSources } from '@/hooks/useIncomeSources';
+import { useBudgetAlerts } from '@/hooks/useBudgetAlerts';
+import { useSavingsGoals } from '@/hooks/useSavingsGoals';
+import { useBillReminders } from '@/hooks/useBillReminders';
+import { useCreditCardIntegration } from '@/hooks/useCreditCardIntegration';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import { aiService, InvestmentInsight } from '@/lib/aiService';
 import { useNavigate } from 'react-router-dom';
 import { HybridBankNotifications } from '../lib/hybridBankNotifications';
@@ -13,6 +19,7 @@ import { MonthlyIncomeDialog } from '@/components/MonthlyIncomeDialog';
 import { IncomeSourcesDialog } from '@/components/IncomeSourcesDialog';
 import { InvestmentTypeSelector } from '@/components/InvestmentTypeSelector';
 import { InvestmentInstructions } from '@/components/InvestmentInstructions';
+import { FinancialHealthDialog } from '@/components/FinancialHealthDialog';
 import { InvestmentType } from '@/types/investment';
 import { investmentTypes } from '@/data/investmentTypes';
 
@@ -21,19 +28,39 @@ const Index = () => {
   const { transactions } = useTransactions();
   const { selectedInvestmentType, setSelectedInvestmentType } = useInvestmentPreferences();
   const { monthlyIncome, setMonthlyIncome } = useMonthlyIncome();
-  const { 
-    incomeSources, 
-    addIncomeSource, 
-    updateIncomeSource, 
-    deleteIncomeSource, 
+  const {
+    incomeSources,
+    addIncomeSource,
+    updateIncomeSource,
+    deleteIncomeSource,
     analyzeIncome,
-    getTotalExpectedIncome 
+    getTotalExpectedIncome
   } = useIncomeSources();
+
+  // New hooks for enhanced features
+  const { getBudgetStatuses, checkBudgetAlerts } = useBudgetAlerts();
+  const { getAllSavingsProgress, getSavingsSummary } = useSavingsGoals();
+  const { getUpcomingBills, getOverdueBills } = useBillReminders();
+  const { getCreditCardSpending, getCreditUtilizationWarnings } = useCreditCardIntegration();
+  const { getCategoryInsights, calculateFinancialHealth } = useAnalytics();
+
   const [investmentInsight, setInvestmentInsight] = useState<InvestmentInsight | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
   const [serviceStatus, setServiceStatus] = useState({ enabled: false, notificationEnabled: false, accessibilityEnabled: false });
   const [showIncomeDialog, setShowIncomeDialog] = useState(false);
   const [showIncomeSourcesDialog, setShowIncomeSourcesDialog] = useState(false);
+  const [showFinancialHealthDialog, setShowFinancialHealthDialog] = useState(false);
+
+  // Dashboard stats
+  const budgetStatuses = getBudgetStatuses(transactions);
+  const savingsProgress = getAllSavingsProgress();
+  const savingsSummary = getSavingsSummary();
+  const upcomingBills = getUpcomingBills(7);
+  const overdueBills = getOverdueBills();
+  const creditCardSpending = getCreditCardSpending(transactions);
+  const creditUtilizationWarnings = getCreditUtilizationWarnings(creditCardSpending);
+  const categoryInsights = getCategoryInsights(transactions);
+  const financialHealth = calculateFinancialHealth(transactions, monthlyIncome);
 
   
   useEffect(() => {
@@ -65,7 +92,7 @@ const Index = () => {
       setServiceStatus(status);
       
     });
-  }, [transactions, selectedInvestmentType, monthlyIncome, incomeSources, analyzeIncome, getTotalExpectedIncome]);
+  }, [transactions, selectedInvestmentType, monthlyIncome, incomeSources, analyzeIncome]);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -158,7 +185,7 @@ const Index = () => {
           </Button>
         </div>
 
-        {/* AI Investment Insights */}
+        {/* AI Investment Insights - Moved up */}
         <Card className="bg-gradient-primary shadow-xl mb-8 rounded-2xl">
           <CardContent className="p-6">
             {loadingInsight ? (
@@ -177,7 +204,7 @@ const Index = () => {
                     {investmentInsight.savingsPercentage.toFixed(1)}% da sua renda
                   </p>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="text-center">
                     <p className="text-primary-foreground/70 text-xs">Renda Mensal</p>
@@ -192,7 +219,7 @@ const Index = () => {
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="bg-primary-foreground/10 rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-8 h-8 bg-primary-foreground/20 rounded-full flex items-center justify-center">
@@ -217,7 +244,7 @@ const Index = () => {
           </CardContent>
         </Card>
 
-        {/* Investment Customization */}
+        {/* Investment Customization - Moved up */}
         {transactions.length > 0 && (
           <Card className="bg-gradient-card shadow-xl mb-8 rounded-2xl">
             <CardContent className="p-6">
@@ -234,7 +261,7 @@ const Index = () => {
                   aiRecommendedType={investmentInsight?.recommendedInvestmentId}
                   onSelect={handleInvestmentTypeSelect}
                 />
-                
+
                 {/* Show instructions for selected investment type */}
                 {(investmentInsight?.customInvestmentType || selectedInvestmentType) && (
                   <div className="mt-4 flex justify-center">
@@ -245,7 +272,187 @@ const Index = () => {
             </CardContent>
           </Card>
         )}
-        
+
+        {/* Enhanced Dashboard Sections */}
+        {transactions.length > 0 && (
+          <>
+            {/* Financial Health Score - with click handler */}
+            <Card
+              className="mb-6 border-border cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setShowFinancialHealthDialog(true)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold text-foreground">Saúde Financeira</h3>
+                  </div>
+                  <span className="text-2xl font-bold text-primary">{financialHealth.score}</span>
+                </div>
+                <Progress value={financialHealth.score} className="h-2 mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {financialHealth.riskLevel === 'low' ? '✅ Excelente - Clique para dicas' :
+                   financialHealth.riskLevel === 'medium' ? '⚠️ Moderado - Clique para dicas' : '🚨 Atenção necessária - Clique para dicas'}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              {/* Savings Goals */}
+              {savingsProgress.length > 0 && (
+                <Card className="border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Target className="h-4 w-4 text-green-600" />
+                      <p className="text-sm font-medium">Metas</p>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">
+                      {savingsSummary.activeGoals}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      R$ {savingsSummary.totalSaved.toLocaleString('pt-BR')} economizado
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Budget Alerts */}
+              {budgetStatuses.length > 0 && (
+                <Card className="border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Bell className="h-4 w-4 text-orange-600" />
+                      <p className="text-sm font-medium">Orçamentos</p>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">
+                      {budgetStatuses.filter(b => b.isNearLimit).length}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Próximos do limite</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Credit Cards */}
+              {creditCardSpending.length > 0 && (
+                <Card className="border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="h-4 w-4 text-blue-600" />
+                      <p className="text-sm font-medium">Cartões</p>
+                    </div>
+                    <p className="text-xl font-bold text-foreground">
+                      {creditCardSpending.length}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {creditUtilizationWarnings.length > 0 ? `${creditUtilizationWarnings.length} alertas` : 'Tudo OK'}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
+            </div>
+
+            {/* Alerts and Warnings */}
+            {(overdueBills.length > 0 || upcomingBills.length > 0 || creditUtilizationWarnings.length > 0) && (
+              <Card className="mb-6 border-l-4 border-l-orange-500 border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-semibold text-foreground">Alertas Importantes</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {overdueBills.map((bill) => (
+                      <div key={bill.id} className="text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                        🚨 <span className="font-medium">{bill.name}</span> está em atraso
+                      </div>
+                    ))}
+                    {upcomingBills.slice(0, 2).map((bill) => (
+                      <div key={bill.id} className="text-sm bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
+                        ⏰ <span className="font-medium">{bill.name}</span> vence em {Math.ceil((bill.nextDueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))} dias
+                      </div>
+                    ))}
+                    {creditUtilizationWarnings.slice(0, 2).map((warning, index) => (
+                      <div key={index} className="text-sm bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                        {warning}
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={() => navigate('/settings')}
+                  >
+                    Gerenciar Alertas
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Top Savings Goal Progress */}
+            {savingsProgress.length > 0 && (
+              <Card className="mb-6 border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Target className="h-5 w-5 text-green-600" />
+                      <h3 className="font-semibold text-foreground">Meta Principal</h3>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate('/savings-goals')}
+                    >
+                      Ver todas
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {savingsProgress.slice(0, 2).map((progress) => (
+                      <div key={progress.goal.id}>
+                        <div className="flex justify-between items-center mb-1">
+                          <p className="font-medium text-foreground">{progress.goal.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {progress.percentage.toFixed(0)}%
+                          </p>
+                        </div>
+                        <Progress value={progress.percentage} className="h-2" />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          R$ {progress.goal.currentAmount.toLocaleString('pt-BR')} / R$ {progress.goal.targetAmount.toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quick Actions for New Features */}
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              <Button
+                variant="outline"
+                className="h-16 p-4"
+                onClick={() => navigate('/settings')}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  <span className="text-sm">Configurações</span>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-16 p-4"
+                onClick={() => navigate('/analytics')}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  <span className="text-sm">Análises</span>
+                </div>
+              </Button>
+            </div>
+          </>
+        )}
+
         {/* Service Setup Card for users with no transactions */}
         {transactions.length === 0 && (
           <Card className="bg-gradient-card shadow-xl rounded-2xl">
@@ -299,6 +506,12 @@ const Index = () => {
         onAddSource={addIncomeSource}
         onUpdateSource={updateIncomeSource}
         onDeleteSource={deleteIncomeSource}
+      />
+
+      <FinancialHealthDialog
+        open={showFinancialHealthDialog}
+        onOpenChange={setShowFinancialHealthDialog}
+        financialHealth={financialHealth}
       />
     </div>
   );

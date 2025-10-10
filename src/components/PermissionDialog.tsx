@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Smartphone, Check, AlertCircle } from 'lucide-react';
@@ -19,9 +19,9 @@ export const PermissionDialog = ({ onComplete }: PermissionDialogProps) => {
   useEffect(() => {
     // Check current permissions on mount
     checkPermissions();
-  }, []);
+  }, [checkPermissions]);
 
-  const checkPermissions = async () => {
+  const checkPermissions = useCallback(async () => {
     try {
       const status = await HybridBankNotifications.isEnabled();
       setNotificationGranted(status.notificationEnabled);
@@ -34,7 +34,7 @@ export const PermissionDialog = ({ onComplete }: PermissionDialogProps) => {
     } catch (error) {
       console.error('Failed to check permissions:', error);
     }
-  };
+  }, [onComplete]);
 
   const requestNotificationPermission = async () => {
     alert('🔧 DEBUG: Configurar Agora button clicked!');

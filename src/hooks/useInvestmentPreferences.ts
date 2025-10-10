@@ -6,38 +6,69 @@ interface InvestmentPreferences {
   selectedInvestmentType: string;
 }
 
-const loadStored = (): InvestmentPreferences => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { selectedInvestmentType: '' };
-    return JSON.parse(raw) as InvestmentPreferences;
-  } catch {
-    return { selectedInvestmentType: '' };
-  }
+const defaultPreferences: InvestmentPreferences = {
+  selectedInvestmentType: ''
 };
 
-const persist = (preferences: InvestmentPreferences) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+const loadStoredPreferences = (): InvestmentPreferences => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return defaultPreferences;
+    }
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as InvestmentPreferences;
+      console.log('Loaded investment preferences:', parsed);
+      return parsed;
+    } else {
+      // No stored preferences found - create and save defaults
+      console.log('No investment preferences found, creating defaults');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultPreferences));
+      return defaultPreferences;
+    }
+  } catch (error) {
+    console.error('Error loading investment preferences:', error);
+  }
+  return defaultPreferences;
 };
 
 export const useInvestmentPreferences = () => {
-  const [preferences, setPreferences] = useState<InvestmentPreferences>(loadStored());
+  const [preferences, setPreferences] = useState<InvestmentPreferences>(loadStoredPreferences());
+  const [isLoaded, setIsLoaded] = useState(true);
+
+  const persistPreferences = (newPreferences: InvestmentPreferences) => {
+    try {
+      console.log('Saving investment preferences:', newPreferences);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
+    } catch (error) {
+      console.error('Error saving investment preferences:', error);
+    }
+  };
 
   const setSelectedInvestmentType = (investmentType: string) => {
-    const newPreferences = { ...preferences, selectedInvestmentType: investmentType };
-    setPreferences(newPreferences);
-    persist(newPreferences);
+    setPreferences(prev => {
+      const updated = { ...prev, selectedInvestmentType: investmentType };
+      persistPreferences(updated);
+      return updated;
+    });
   };
 
   const clearPreferences = () => {
-    const defaultPreferences = { selectedInvestmentType: '' };
-    setPreferences(defaultPreferences);
-    localStorage.removeItem(STORAGE_KEY);
+    setPreferences(prev => {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        return defaultPreferences;
+      } catch (error) {
+        console.error('Error clearing investment preferences:', error);
+        return prev;
+      }
+    });
   };
 
   return {
     selectedInvestmentType: preferences.selectedInvestmentType,
     setSelectedInvestmentType,
-    clearPreferences
+    clearPreferences,
+    isLoaded
   };
 };

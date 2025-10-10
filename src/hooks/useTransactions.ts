@@ -184,7 +184,7 @@ export const useTransactions = () => {
     return getCurrentMonthTransactions().filter(t => t.type === 'sent');
   };
   
-  const getMonthlyData = (incomeSources?: Array<any>, getMonthlyAmountFromSource?: (source: any) => number): MonthlyData[] => {
+  const getMonthlyData = (incomeSources?: Array<{ id: string; name: string; amount: number; frequency: string }>, getMonthlyAmountFromSource?: (source: { id: string; name: string; amount: number; frequency: string }) => number): MonthlyData[] => {
     const monthlyData: { [key: string]: MonthlyData } = {};
     
     // Create correct 5-month sequence: last 2 + current + next 2
@@ -218,8 +218,8 @@ export const useTransactions = () => {
       const currentMonthIndex = Object.keys(monthlyData).sort().indexOf(currentMonthKey);
       
       if (currentMonthIndex >= 0) {
-        const activeIncomeSources = incomeSources.filter((source: any) => source.isActive);
-        const totalExpectedIncome = activeIncomeSources.reduce((sum: number, source: any) => 
+        const activeIncomeSources = incomeSources.filter((source: { id: string; name: string; amount: number; frequency: string; isActive?: boolean }) => source.isActive);
+        const totalExpectedIncome = activeIncomeSources.reduce((sum: number, source: { id: string; name: string; amount: number; frequency: string }) =>
           sum + getMonthlyAmountFromSource(source), 0
         );
 

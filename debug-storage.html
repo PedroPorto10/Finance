@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storage Debug Test</title>
+</head>
+<body>
+    <h1>Storage Debug Test</h1>
+    <button onclick="testStorage()">Test Storage</button>
+    <button onclick="checkStorage()">Check Storage</button>
+    <div id="output"></div>
+
+    <script type="module">
+        // Import the SimpleStorage class
+        import { SimpleStorage } from './src/lib/simpleStorage.js';
+
+        window.testStorage = async function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>Testing storage...</p>';
+
+            try {
+                const testData = { test: 'data', timestamp: new Date().toISOString() };
+                console.log('Attempting to save:', testData);
+
+                const success = await SimpleStorage.setObjectAsync('debug-test', testData);
+                output.innerHTML += `<p>Save result: ${success}</p>`;
+
+                const retrieved = await SimpleStorage.getObjectAsync('debug-test', {});
+                output.innerHTML += `<p>Retrieved: ${JSON.stringify(retrieved)}</p>`;
+
+                // Also check localStorage directly
+                const directCheck = localStorage.getItem('debug-test');
+                output.innerHTML += `<p>Direct localStorage check: ${directCheck}</p>`;
+
+            } catch (error) {
+                output.innerHTML += `<p>Error: ${error.message}</p>`;
+                console.error('Storage test error:', error);
+            }
+        };
+
+        window.checkStorage = function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<h2>Current Storage Contents:</h2>';
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                output.innerHTML += `<p><strong>${key}:</strong> ${value}</p>`;
+            }
+        };
+    </script>
+</body>
+</html>

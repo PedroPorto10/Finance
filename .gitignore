@@ -29,3 +29,5 @@ dist-ssr
 *.sw?
 desktop-dist/
 desktop-dist/the
+CLAUDE.md
+.claude

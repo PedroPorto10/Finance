@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Storage Test</title>
+</head>
+<body>
+    <h1>Storage Test</h1>
+    <button id="test-storage">Test Storage</button>
+    <button id="clear-storage">Clear Storage</button>
+    <div id="output"></div>
+
+    <script>
+        function log(message) {
+            document.getElementById('output').innerHTML += '<p>' + message + '</p>';
+        }
+
+        document.getElementById('test-storage').onclick = function() {
+            log('Testing localStorage...');
+
+            // Test localStorage
+            try {
+                localStorage.setItem('test-key', JSON.stringify({theme: 'dark', test: true}));
+                const retrieved = localStorage.getItem('test-key');
+                log('localStorage SET: ' + retrieved);
+
+                const parsed = JSON.parse(retrieved);
+                log('localStorage PARSED: ' + JSON.stringify(parsed));
+            } catch (error) {
+                log('localStorage ERROR: ' + error.message);
+            }
+
+            // Test what's already stored
+            log('Current theme-settings: ' + localStorage.getItem('theme-settings'));
+        };
+
+        document.getElementById('clear-storage').onclick = function() {
+            localStorage.clear();
+            log('Storage cleared');
+        };
+
+        // Show what's in storage on load
+        log('On load - theme-settings: ' + localStorage.getItem('theme-settings'));
+    </script>
+</body>
+</html>
