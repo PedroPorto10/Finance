@@ -2,24 +2,48 @@ import { useState, useEffect, useCallback } from 'react';
 import { BudgetAlert, BudgetStatus, BudgetPeriod } from '@/types/budget';
 import { Transaction } from '@/types/transaction';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { appInitializer } from '@/lib/appInitializer';
 import { settingsService } from '@/lib/settingsService';
 
+// Initialize state with data from appInitializer if available
+const getInitialBudgetAlerts = (): BudgetAlert[] => {
+  const settings = appInitializer.getSettings();
+  if (settings?.budgetAlerts && Array.isArray(settings.budgetAlerts)) {
+    console.log('useBudgetAlerts: Initializing with cached alerts:', settings.budgetAlerts.length);
+    return settings.budgetAlerts;
+  }
+  console.log('useBudgetAlerts: No cached alerts, starting with empty array');
+  return [];
+};
+
 export const useBudgetAlerts = () => {
-  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>(getInitialBudgetAlerts());
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load budget alerts on mount
+  // Load budget alerts from appInitializer (already loaded on app start)
   useEffect(() => {
     let mounted = true;
 
     const loadBudgetAlerts = async () => {
-      console.log('useBudgetAlerts: Loading budget alerts...');
-      const alerts = await settingsService.getBudgetAlerts();
+      console.log('useBudgetAlerts: Loading budget alerts from appInitializer...');
+      const settings = appInitializer.getSettings();
 
-      if (mounted) {
-        console.log('useBudgetAlerts: Loaded alerts:', alerts);
-        setBudgetAlerts(alerts);
-        setIsInitialized(true);
+      if (settings) {
+        if (mounted) {
+          console.log('useBudgetAlerts: Loaded alerts from cache:', settings.budgetAlerts);
+          // Ensure it's an array
+          const alerts = Array.isArray(settings.budgetAlerts) ? settings.budgetAlerts : [];
+          setBudgetAlerts(alerts);
+          setIsInitialized(true);
+        }
+      } else {
+        // Fallback to loading directly if appInitializer not ready
+        console.warn('useBudgetAlerts: appInitializer not ready, loading directly');
+        const alerts = await settingsService.getBudgetAlerts();
+        if (mounted) {
+          setBudgetAlerts(alerts);
+          setIsInitialized(true);
+        }
       }
     };
 
@@ -35,25 +59,39 @@ export const useBudgetAlerts = () => {
     console.log('useBudgetAlerts: addBudgetAlert called with:', alert);
     const newAlert = await settingsService.addBudgetAlert(alert);
     console.log('useBudgetAlerts: Created new alert:', newAlert);
-    setBudgetAlerts(prev => [...prev, newAlert]);
+
+    const updatedAlerts = [...budgetAlerts, newAlert];
+    setBudgetAlerts(updatedAlerts);
+
+    // Update appInitializer cache
+    await appInitializer.updateBudgetAlerts(updatedAlerts);
+
     return newAlert;
-  }, []);
+  }, [budgetAlerts]);
 
   // Update a budget alert
   const updateBudgetAlert = useCallback(async (id: string, updates: Partial<BudgetAlert>) => {
     const updated = await settingsService.updateBudgetAlert(id, updates);
     if (updated) {
-      setBudgetAlerts(prev => prev.map(a => a.id === id ? updated : a));
+      const updatedAlerts = budgetAlerts.map(a => a.id === id ? updated : a);
+      setBudgetAlerts(updatedAlerts);
+
+      // Update appInitializer cache
+      await appInitializer.updateBudgetAlerts(updatedAlerts);
     }
-  }, []);
+  }, [budgetAlerts]);
 
   // Delete a budget alert
   const deleteBudgetAlert = useCallback(async (id: string) => {
     const success = await settingsService.deleteBudgetAlert(id);
     if (success) {
-      setBudgetAlerts(prev => prev.filter(a => a.id !== id));
+      const updatedAlerts = budgetAlerts.filter(a => a.id !== id);
+      setBudgetAlerts(updatedAlerts);
+
+      // Update appInitializer cache
+      await appInitializer.updateBudgetAlerts(updatedAlerts);
     }
-  }, []);
+  }, [budgetAlerts]);
 
   // Get budget period dates
   const getBudgetPeriod = useCallback((type: BudgetAlert['period']): BudgetPeriod => {

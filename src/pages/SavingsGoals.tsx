@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Target, Plus, Edit, Trash2, TrendingUp, Calendar, PiggyBank } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,20 +10,11 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { SavingsGoal } from '@/types/savings';
-import { AppSettings } from '@/lib/appSettings';
+import { useSavingsGoals } from '@/hooks/useSavingsGoals';
 
 const SavingsGoals = () => {
   const navigate = useNavigate();
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
-
-  // Load savings goals on mount
-  useEffect(() => {
-    const loadGoals = async () => {
-      const goals = await AppSettings.getSavingsGoals();
-      setSavingsGoals(goals);
-    };
-    loadGoals();
-  }, []);
+  const { savingsGoals, addSavingsGoal, updateSavingsGoal, deleteSavingsGoal, addContribution } = useSavingsGoals();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAddAmountDialog, setShowAddAmountDialog] = useState(false);
@@ -60,8 +51,8 @@ const SavingsGoals = () => {
 
   const createGoal = async () => {
     if (newGoal.name && newGoal.targetAmount && newGoal.targetAmount > 0) {
-      const newSavingsGoal: SavingsGoal = {
-        id: `goal-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      // Use the hook function to add the goal
+      await addSavingsGoal({
         name: newGoal.name,
         description: newGoal.description,
         targetAmount: newGoal.targetAmount,
@@ -70,16 +61,10 @@ const SavingsGoals = () => {
         targetDate: newGoal.targetDate,
         isActive: newGoal.isActive ?? true,
         priority: newGoal.priority || 'medium',
-        monthlyContribution: newGoal.monthlyContribution,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+        monthlyContribution: newGoal.monthlyContribution
+      });
 
-      // Add to state and save
-      const updatedGoals = [...savingsGoals, newSavingsGoal];
-      setSavingsGoals(updatedGoals);
-      await AppSettings.setSavingsGoals(updatedGoals);
-
+      // Reset form
       setNewGoal({
         name: '',
         description: '',
@@ -96,31 +81,25 @@ const SavingsGoals = () => {
   };
 
   const toggleGoal = async (id: string) => {
-    const updatedGoals = savingsGoals.map(g =>
-      g.id === id ? { ...g, isActive: !g.isActive, updatedAt: new Date() } : g
-    );
-    setSavingsGoals(updatedGoals);
-    await AppSettings.setSavingsGoals(updatedGoals);
+    const goal = savingsGoals.find(g => g.id === id);
+    if (goal) {
+      await updateSavingsGoal(id, { isActive: !goal.isActive });
+    }
   };
 
-  const deleteGoal = async (id: string) => {
-    const updatedGoals = savingsGoals.filter(g => g.id !== id);
-    setSavingsGoals(updatedGoals);
-    await AppSettings.setSavingsGoals(updatedGoals);
+  const handleDeleteGoal = async (id: string) => {
+    await deleteSavingsGoal(id);
   };
 
-  const addAmount = async () => {
+  const addAmountToGoal = async () => {
     if (selectedGoal && contributionAmount > 0) {
-      // Update the goal's current amount
-      const updatedGoals = savingsGoals.map(g =>
-        g.id === selectedGoal ? {
-          ...g,
-          currentAmount: g.currentAmount + contributionAmount,
-          updatedAt: new Date()
-        } : g
-      );
-      setSavingsGoals(updatedGoals);
-      await AppSettings.setSavingsGoals(updatedGoals);
+      await addContribution({
+        goalId: selectedGoal,
+        amount: contributionAmount,
+        date: new Date(),
+        method: 'manual',
+        notes: 'Contribuição manual'
+      });
 
       setContributionAmount(0);
       setSelectedGoal(null);
@@ -305,7 +284,7 @@ const SavingsGoals = () => {
                   placeholder="100"
                 />
               </div>
-              <Button onClick={addAmount} className="w-full">
+              <Button onClick={addAmountToGoal} className="w-full">
                 Adicionar
               </Button>
             </div>
@@ -354,7 +333,7 @@ const SavingsGoals = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteGoal(progress.goal.id)}
+                        onClick={() => handleDeleteGoal(progress.goal.id)}
                         className="h-8 w-8 text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -392,12 +371,6 @@ const SavingsGoals = () => {
                         <span>R$ {progress.goal.monthlyContribution.toFixed(2)}</span>
                       </div>
                     )}
-                    {progress.monthsToGoal && (
-                      <div className="flex justify-between">
-                        <span>Tempo estimado:</span>
-                        <span>{progress.monthsToGoal} meses</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Status indicators */}
@@ -405,12 +378,6 @@ const SavingsGoals = () => {
                     <div className="mt-2 flex items-center gap-1 text-xs text-green-600 font-medium">
                       <Target className="h-3 w-3" />
                       <span>Meta alcançada!</span>
-                    </div>
-                  )}
-                  {progress.goal.targetDate && !progress.isOnTrack && progress.percentage < 100 && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-yellow-600 font-medium">
-                      <TrendingUp className="h-3 w-3" />
-                      <span>Atrasado - aumente a contribuição</span>
                     </div>
                   )}
                 </CardContent>

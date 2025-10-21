@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,20 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BudgetAlert } from '@/types/budget';
-import { AppSettings } from '@/lib/appSettings';
+import { useBudgetAlerts } from '@/hooks/useBudgetAlerts';
 
 const BudgetAlerts = () => {
   const navigate = useNavigate();
-  const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
-
-  // Load budget alerts on mount
-  useEffect(() => {
-    const loadAlerts = async () => {
-      const alerts = await AppSettings.getBudgetAlerts();
-      setBudgetAlerts(alerts);
-    };
-    loadAlerts();
-  }, []);
+  const { budgetAlerts, addBudgetAlert, updateBudgetAlert, deleteBudgetAlert } = useBudgetAlerts();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newAlert, setNewAlert] = useState<Partial<BudgetAlert>>({
@@ -45,27 +36,19 @@ const BudgetAlerts = () => {
     if (newAlert.category && newAlert.limit && newAlert.limit > 0) {
       console.log('BudgetAlerts: Validation passed, creating new alert');
 
-      const newBudgetAlert: BudgetAlert = {
-        id: `budget-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      // Use the hook function to add the alert
+      await addBudgetAlert({
         category: newAlert.category,
         limit: newAlert.limit,
         threshold: newAlert.threshold || 80,
         isActive: newAlert.isActive ?? true,
         period: newAlert.period || 'monthly',
-        notifications: newAlert.notifications || { push: true, email: false },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+        notifications: newAlert.notifications || { push: true, email: false }
+      });
 
-      console.log('BudgetAlerts: Created alert object:', newBudgetAlert);
+      console.log('BudgetAlerts: Alert added via hook');
 
-      // Add to current state
-      const updatedAlerts = [...budgetAlerts, newBudgetAlert];
-      setBudgetAlerts(updatedAlerts);
-
-      // Save to storage
-      const success = await AppSettings.setBudgetAlerts(updatedAlerts);
-      console.log('BudgetAlerts: Save to storage result:', success);
+      // Reset form
       setNewAlert({
         category: 'Alimentação',
         limit: 0,
@@ -85,28 +68,17 @@ const BudgetAlerts = () => {
     console.log('BudgetAlerts: toggleAlert called with id:', id);
     const alert = budgetAlerts.find(a => a.id === id);
     if (alert) {
-      // Update local state
-      const updatedAlerts = budgetAlerts.map(a =>
-        a.id === id ? { ...a, isActive: !a.isActive, updatedAt: new Date() } : a
-      );
-      setBudgetAlerts(updatedAlerts);
-
-      // Save to storage
-      const success = await AppSettings.setBudgetAlerts(updatedAlerts);
-      console.log('BudgetAlerts: Toggle save result:', success);
+      // Use the hook function to update the alert
+      await updateBudgetAlert(id, { isActive: !alert.isActive });
+      console.log('BudgetAlerts: Alert toggled via hook');
     }
   };
 
-  const deleteAlert = async (id: string) => {
+  const handleDeleteAlert = async (id: string) => {
     console.log('BudgetAlerts: deleteAlert called with id:', id);
-
-    // Update local state
-    const updatedAlerts = budgetAlerts.filter(alert => alert.id !== id);
-    setBudgetAlerts(updatedAlerts);
-
-    // Save to storage
-    const success = await AppSettings.setBudgetAlerts(updatedAlerts);
-    console.log('BudgetAlerts: Delete save result:', success);
+    // Use the hook function to delete the alert
+    await deleteBudgetAlert(id);
+    console.log('BudgetAlerts: Alert deleted via hook');
   };
 
   return (
@@ -247,7 +219,7 @@ const BudgetAlerts = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteAlert(alert.id)}
+                        onClick={() => handleDeleteAlert(alert.id)}
                         className="h-8 w-8 text-destructive hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />

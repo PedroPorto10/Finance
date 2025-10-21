@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Plus, Edit, Trash2, Clock, DollarSign, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,20 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BillReminder } from '@/types/billReminder';
-import { AppSettings } from '@/lib/appSettings';
+import { useBillReminders } from '@/hooks/useBillReminders';
 
 const BillReminders = () => {
   const navigate = useNavigate();
-  const [billReminders, setBillReminders] = useState<BillReminder[]>([]);
-
-  // Load reminders on mount
-  useEffect(() => {
-    const loadReminders = async () => {
-      const reminders = await AppSettings.getBillReminders();
-      setBillReminders(reminders);
-    };
-    loadReminders();
-  }, []);
+  const { billReminders, addBillReminder, updateBillReminder, deleteBillReminder, markBillAsPaid } = useBillReminders();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newReminder, setNewReminder] = useState<Partial<BillReminder>>({
@@ -41,27 +32,19 @@ const BillReminders = () => {
 
   const createReminder = async () => {
     if (newReminder.name && newReminder.dueDate) {
-      const newBillReminder: BillReminder = {
-        id: `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      // Use the hook function to add the reminder
+      await addBillReminder({
         name: newReminder.name,
         description: newReminder.description,
         amount: newReminder.amount,
         category: newReminder.category || 'Contas',
         frequency: newReminder.frequency || 'monthly',
         dueDate: newReminder.dueDate,
-        nextDueDate: newReminder.dueDate, // Simplified - could calculate next date
         reminderDays: newReminder.reminderDays || [3],
         isActive: newReminder.isActive ?? true,
         isRecurring: newReminder.isRecurring ?? true,
-        contactPattern: newReminder.contactPattern,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      // Add to state and save
-      const updatedReminders = [...billReminders, newBillReminder];
-      setBillReminders(updatedReminders);
-      await AppSettings.setBillReminders(updatedReminders);
+        contactPattern: newReminder.contactPattern
+      });
 
       setNewReminder({
         name: '',
@@ -79,25 +62,18 @@ const BillReminders = () => {
   };
 
   const toggleReminder = async (id: string) => {
-    const updatedReminders = billReminders.map(r =>
-      r.id === id ? { ...r, isActive: !r.isActive, updatedAt: new Date() } : r
-    );
-    setBillReminders(updatedReminders);
-    await AppSettings.setBillReminders(updatedReminders);
+    const reminder = billReminders.find(r => r.id === id);
+    if (reminder) {
+      await updateBillReminder(id, { isActive: !reminder.isActive });
+    }
   };
 
-  const deleteReminder = async (id: string) => {
-    const updatedReminders = billReminders.filter(r => r.id !== id);
-    setBillReminders(updatedReminders);
-    await AppSettings.setBillReminders(updatedReminders);
+  const deleteReminderHandler = async (id: string) => {
+    await deleteBillReminder(id);
   };
 
-  const markAsPaid = async (id: string) => {
-    const updatedReminders = billReminders.map(r =>
-      r.id === id ? { ...r, lastPaidDate: new Date(), updatedAt: new Date() } : r
-    );
-    setBillReminders(updatedReminders);
-    await AppSettings.setBillReminders(updatedReminders);
+  const markAsPaidHandler = async (id: string) => {
+    await markBillAsPaid(id);
   };
 
   const formatDate = (date: Date) => {
@@ -271,7 +247,7 @@ const BillReminders = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => markAsPaid(reminder.id)}
+                            onClick={() => markAsPaidHandler(reminder.id)}
                             className="text-green-600 hover:text-green-700"
                           >
                             Pago
@@ -284,7 +260,7 @@ const BillReminders = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteReminder(reminder.id)}
+                          onClick={() => deleteReminderHandler(reminder.id)}
                           className="h-8 w-8 text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />

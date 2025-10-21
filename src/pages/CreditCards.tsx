@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CreditCard as CreditCardIcon, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -8,32 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AppSettings } from '@/lib/appSettings';
-
-// Define the CreditCardInfo interface to match the hook
-interface CreditCardInfo {
-  id: string;
-  name: string;
-  last4Digits: string;
-  limit: number;
-  currentBalance: number;
-  dueDate: number;
-  isActive: boolean;
-  notificationPatterns: string[];
-}
+import { useCreditCardIntegration } from '@/hooks/useCreditCardIntegration';
+import { CreditCard } from '@/types/creditCard';
 
 const CreditCards = () => {
   const navigate = useNavigate();
-  const [creditCards, setCreditCards] = useState<CreditCardInfo[]>([]);
-
-  // Load credit cards on mount
-  useEffect(() => {
-    const loadCards = async () => {
-      const cards = await AppSettings.getCreditCards();
-      setCreditCards(cards);
-    };
-    loadCards();
-  }, []);
+  const { creditCards, addCreditCard, updateCreditCard, deleteCreditCard } = useCreditCardIntegration();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newCard, setNewCard] = useState({
@@ -49,46 +29,44 @@ const CreditCards = () => {
 
   const createCard = async () => {
     if (newCard.name && newCard.limit) {
-      const newCreditCard: CreditCardInfo = {
-        id: `card-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+      // Use the hook function to add the card
+      await addCreditCard({
         name: newCard.name,
+        bank: newCard.bank,
         last4Digits: Math.floor(1000 + Math.random() * 9000).toString(),
         limit: newCard.limit,
         currentBalance: newCard.currentUsage || 0,
+        currentUsage: newCard.currentUsage || 0,
         dueDate: newCard.dueDate,
+        closingDate: newCard.closingDate,
         isActive: true,
+        enabled: newCard.enabled,
+        color: newCard.color,
         notificationPatterns: [newCard.name]
-      };
+      });
 
-      // Add to state and save
-      const updatedCards = [...creditCards, newCreditCard];
-      setCreditCards(updatedCards);
-      await AppSettings.setCreditCards(updatedCards);
-
+      // Reset form
       setNewCard({ name: '', bank: '', limit: 0, currentUsage: 0, dueDate: 1, closingDate: 1, enabled: true, color: '#3b82f6' });
       setShowCreateDialog(false);
     }
   };
 
   const toggleCard = async (id: string) => {
-    const updatedCards = creditCards.map(c =>
-      c.id === id ? { ...c, isActive: !c.isActive } : c
-    );
-    setCreditCards(updatedCards);
-    await AppSettings.setCreditCards(updatedCards);
+    const card = creditCards.find(c => c.id === id);
+    if (card) {
+      await updateCreditCard(id, { isActive: !card.isActive });
+    }
   };
 
   const deleteCardHandler = async (id: string) => {
-    const updatedCards = creditCards.filter(c => c.id !== id);
-    setCreditCards(updatedCards);
-    await AppSettings.setCreditCards(updatedCards);
+    await deleteCreditCard(id);
   };
 
-  const getUsagePercentage = (card: CreditCardInfo) => {
+  const getUsagePercentage = (card: CreditCard) => {
     return (card.currentBalance / card.limit) * 100;
   };
 
-  const getAvailableLimit = (card: CreditCardInfo) => {
+  const getAvailableLimit = (card: CreditCard) => {
     return card.limit - card.currentBalance;
   };
 
@@ -340,7 +318,7 @@ const CreditCards = () => {
         <Card className="mt-8 border-border">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <CreditCard className="h-5 w-5 text-blue-600 mt-0.5" />
+              <CreditCardIcon className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="space-y-2">
                 <h3 className="font-semibold text-sm text-foreground">Dicas para usar cartão com inteligência</h3>
                 <div className="text-sm text-muted-foreground space-y-1">

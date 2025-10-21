@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Transaction, CreditCardTransaction } from '@/types/transaction';
 import { CreditCard } from '@/types/creditCard';
+import { appInitializer } from '@/lib/appInitializer';
 import { settingsService } from '@/lib/settingsService';
 
 interface CreditCardSpending {
@@ -12,22 +13,45 @@ interface CreditCardSpending {
   categories: { [category: string]: number };
 }
 
+// Initialize state with data from appInitializer if available
+const getInitialCreditCards = (): CreditCard[] => {
+  const settings = appInitializer.getSettings();
+  if (settings?.creditCards && Array.isArray(settings.creditCards)) {
+    console.log('useCreditCardIntegration: Initializing with cached cards:', settings.creditCards.length);
+    return settings.creditCards;
+  }
+  console.log('useCreditCardIntegration: No cached cards, starting with empty array');
+  return [];
+};
+
 export const useCreditCardIntegration = () => {
-  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCard[]>(getInitialCreditCards());
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load credit cards on mount
+  // Load credit cards from appInitializer (already loaded on app start)
   useEffect(() => {
     let mounted = true;
 
     const loadCreditCards = async () => {
-      console.log('useCreditCardIntegration: Loading credit cards...');
-      const cards = await settingsService.getCreditCards();
+      console.log('useCreditCardIntegration: Loading credit cards from appInitializer...');
+      const settings = appInitializer.getSettings();
 
-      if (mounted) {
-        console.log('useCreditCardIntegration: Loaded credit cards:', cards);
-        setCreditCards(cards);
-        setIsInitialized(true);
+      if (settings) {
+        if (mounted) {
+          console.log('useCreditCardIntegration: Loaded credit cards from cache:', settings.creditCards);
+          // Ensure it's an array
+          const cards = Array.isArray(settings.creditCards) ? settings.creditCards : [];
+          setCreditCards(cards);
+          setIsInitialized(true);
+        }
+      } else {
+        // Fallback to loading directly if appInitializer not ready
+        console.warn('useCreditCardIntegration: appInitializer not ready, loading directly');
+        const cards = await settingsService.getCreditCards();
+        if (mounted) {
+          setCreditCards(cards);
+          setIsInitialized(true);
+        }
       }
     };
 
@@ -41,25 +65,39 @@ export const useCreditCardIntegration = () => {
   // Add a new credit card
   const addCreditCard = useCallback(async (card: Omit<CreditCard, 'id'>) => {
     const newCard = await settingsService.addCreditCard(card);
-    setCreditCards(prev => [...prev, newCard]);
+
+    const updatedCards = [...creditCards, newCard];
+    setCreditCards(updatedCards);
+
+    // Update appInitializer cache
+    await appInitializer.updateCreditCards(updatedCards);
+
     return newCard;
-  }, []);
+  }, [creditCards]);
 
   // Update a credit card
   const updateCreditCard = useCallback(async (id: string, updates: Partial<CreditCard>) => {
     const updated = await settingsService.updateCreditCard(id, updates);
     if (updated) {
-      setCreditCards(prev => prev.map(c => c.id === id ? updated : c));
+      const updatedCards = creditCards.map(c => c.id === id ? updated : c);
+      setCreditCards(updatedCards);
+
+      // Update appInitializer cache
+      await appInitializer.updateCreditCards(updatedCards);
     }
-  }, []);
+  }, [creditCards]);
 
   // Delete a credit card
   const deleteCreditCard = useCallback(async (id: string) => {
     const success = await settingsService.deleteCreditCard(id);
     if (success) {
-      setCreditCards(prev => prev.filter(c => c.id !== id));
+      const updatedCards = creditCards.filter(c => c.id !== id);
+      setCreditCards(updatedCards);
+
+      // Update appInitializer cache
+      await appInitializer.updateCreditCards(updatedCards);
     }
-  }, []);
+  }, [creditCards]);
 
   // Parse credit card notification
   const parseCreditCardNotification = useCallback((notificationText: string): Partial<CreditCardTransaction> | null => {
@@ -226,7 +264,7 @@ export const useCreditCardIntegration = () => {
   }, [creditCards]);
 
   // Get upcoming due dates
-  const getUpcomingDueDates = useCallback((): { card: CreditCardInfo; daysUntilDue: number }[] => {
+  const getUpcomingDueDates = useCallback((): { card: CreditCard; daysUntilDue: number }[] => {
     const now = new Date();
     const currentDay = now.getDate();
     const currentMonth = now.getMonth();

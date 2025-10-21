@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, TrendingDown, PieChart, Plus, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,65 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Investment } from '@/types/investment';
-import { AppSettings } from '@/lib/appSettings';
+import { useInvestments } from '@/hooks/useInvestments';
 
 const Investments = () => {
   const navigate = useNavigate();
-
-  // Load investments from storage
-  const [investments, setInvestments] = useState<Investment[]>([
-    {
-      id: '1',
-      name: 'Tesouro Selic 2029',
-      type: 'Tesouro Direto',
-      amount: 5000,
-      currentValue: 5250,
-      acquisitionDate: '2024-01-15',
-      expectedReturn: 13.5,
-      risk: 'low'
-    },
-    {
-      id: '2',
-      name: 'CDB Inter 120% CDI',
-      type: 'CDB',
-      amount: 3000,
-      currentValue: 3180,
-      acquisitionDate: '2024-02-01',
-      expectedReturn: 12.8,
-      risk: 'low'
-    },
-    {
-      id: '3',
-      name: 'Fundo Multimercado XP',
-      type: 'Fundo',
-      amount: 2000,
-      currentValue: 1850,
-      acquisitionDate: '2024-03-10',
-      expectedReturn: 15.2,
-      risk: 'medium'
-    },
-    {
-      id: '4',
-      name: 'Ações PETR4',
-      type: 'Ação',
-      amount: 1500,
-      currentValue: 1680,
-      acquisitionDate: '2024-06-15',
-      expectedReturn: 18.0,
-      risk: 'high'
-    }
-  ]);
-
-  // Load investments from storage on mount
-  useEffect(() => {
-    const loadInvestments = async () => {
-      const stored = await AppSettings.getInvestments();
-      if (stored.length > 0) {
-        setInvestments(stored);
-      }
-    };
-    loadInvestments();
-  }, []);
+  const { investments, addInvestment, deleteInvestment } = useInvestments();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newInvestment, setNewInvestment] = useState<Partial<Investment>>({
@@ -94,18 +40,17 @@ const Investments = () => {
         expectedReturn: newInvestment.expectedReturn || 0,
         risk: newInvestment.risk || 'low'
       };
-      const updated = [...investments, investment];
-      setInvestments(updated);
-      await AppSettings.setInvestments(updated);
+
+      // Use the hook function to add the investment
+      await addInvestment(investment);
+
       setNewInvestment({ name: '', type: '', amount: 0, currentValue: 0, acquisitionDate: '', expectedReturn: 0, risk: 'low' });
       setShowCreateDialog(false);
     }
   };
 
-  const deleteInvestment = async (id: string) => {
-    const updated = investments.filter(inv => inv.id !== id);
-    setInvestments(updated);
-    await AppSettings.setInvestments(updated);
+  const deleteInvestmentHandler = async (id: string) => {
+    await deleteInvestment(id);
   };
 
   const getReturn = (investment: Investment) => {
@@ -388,7 +333,7 @@ const Investments = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => deleteInvestment(investment.id)}
+                      onClick={() => deleteInvestmentHandler(investment.id)}
                       className="text-red-500 hover:text-red-600 ml-2"
                     >
                       <Trash2 className="h-4 w-4" />

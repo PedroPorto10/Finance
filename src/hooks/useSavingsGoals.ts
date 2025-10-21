@@ -1,24 +1,48 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SavingsGoal, SavingsContribution, SavingsProgress } from '@/types/savings';
+import { appInitializer } from '@/lib/appInitializer';
 import { settingsService } from '@/lib/settingsService';
 
+// Initialize state with data from appInitializer if available
+const getInitialSavingsGoals = (): SavingsGoal[] => {
+  const settings = appInitializer.getSettings();
+  if (settings?.savingsGoals && Array.isArray(settings.savingsGoals)) {
+    console.log('useSavingsGoals: Initializing with cached goals:', settings.savingsGoals.length);
+    return settings.savingsGoals;
+  }
+  console.log('useSavingsGoals: No cached goals, starting with empty array');
+  return [];
+};
+
 export const useSavingsGoals = () => {
-  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>([]);
+  const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(getInitialSavingsGoals());
   const [contributions, setContributions] = useState<SavingsContribution[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load data on mount
+  // Load data from appInitializer (already loaded on app start)
   useEffect(() => {
     let mounted = true;
 
     const loadData = async () => {
-      console.log('useSavingsGoals: Loading goals...');
-      const goals = await settingsService.getSavingsGoals();
+      console.log('useSavingsGoals: Loading goals from appInitializer...');
+      const settings = appInitializer.getSettings();
 
-      if (mounted) {
-        console.log('useSavingsGoals: Loaded goals:', goals);
-        setSavingsGoals(goals);
-        setIsInitialized(true);
+      if (settings) {
+        if (mounted) {
+          console.log('useSavingsGoals: Loaded goals from cache:', settings.savingsGoals);
+          // Ensure it's an array
+          const goals = Array.isArray(settings.savingsGoals) ? settings.savingsGoals : [];
+          setSavingsGoals(goals);
+          setIsInitialized(true);
+        }
+      } else {
+        // Fallback to loading directly if appInitializer not ready
+        console.warn('useSavingsGoals: appInitializer not ready, loading directly');
+        const goals = await settingsService.getSavingsGoals();
+        if (mounted) {
+          setSavingsGoals(goals);
+          setIsInitialized(true);
+        }
       }
     };
 
@@ -32,31 +56,49 @@ export const useSavingsGoals = () => {
   // Add a new savings goal
   const addSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newGoal = await settingsService.addSavingsGoal(goal);
-    setSavingsGoals(prev => [...prev, newGoal]);
+
+    const updatedGoals = [...savingsGoals, newGoal];
+    setSavingsGoals(updatedGoals);
+
+    // Update appInitializer cache
+    await appInitializer.updateSavingsGoals(updatedGoals);
+
     return newGoal;
-  }, []);
+  }, [savingsGoals]);
 
   // Update a savings goal
   const updateSavingsGoal = useCallback(async (id: string, updates: Partial<SavingsGoal>) => {
     const updated = await settingsService.updateSavingsGoal(id, updates);
     if (updated) {
-      setSavingsGoals(prev => prev.map(g => g.id === id ? updated : g));
+      const updatedGoals = savingsGoals.map(g => g.id === id ? updated : g);
+      setSavingsGoals(updatedGoals);
+
+      // Update appInitializer cache
+      await appInitializer.updateSavingsGoals(updatedGoals);
     }
-  }, []);
+  }, [savingsGoals]);
 
   // Delete a savings goal
   const deleteSavingsGoal = useCallback(async (id: string) => {
     const success = await settingsService.deleteSavingsGoal(id);
     if (success) {
-      setSavingsGoals(prev => prev.filter(g => g.id !== id));
+      const updatedGoals = savingsGoals.filter(g => g.id !== id);
+      setSavingsGoals(updatedGoals);
+
+      // Update appInitializer cache
+      await appInitializer.updateSavingsGoals(updatedGoals);
     }
-  }, []);
+  }, [savingsGoals]);
 
   // Add a contribution to a goal
   const addContribution = useCallback(async (contribution: Omit<SavingsContribution, 'id'>) => {
     const updatedGoal = await settingsService.addContribution(contribution.goalId, contribution.amount);
     if (updatedGoal) {
-      setSavingsGoals(prev => prev.map(g => g.id === contribution.goalId ? updatedGoal : g));
+      const updatedGoals = savingsGoals.map(g => g.id === contribution.goalId ? updatedGoal : g);
+      setSavingsGoals(updatedGoals);
+
+      // Update appInitializer cache
+      await appInitializer.updateSavingsGoals(updatedGoals);
     }
 
     // Create contribution record for tracking
@@ -66,7 +108,7 @@ export const useSavingsGoals = () => {
     };
     setContributions(prev => [...prev, newContribution]);
     return newContribution;
-  }, []);
+  }, [savingsGoals]);
 
   // Calculate savings progress for a goal
   const calculateSavingsProgress = useCallback((goal: SavingsGoal): SavingsProgress => {
