@@ -42,7 +42,7 @@ class UserAgent(Agent):
 
     def run_prompt(self, prompt):
         try:
-            response = self.run(f"Apenas continue com a resposta se o prompt a seguir for em relação aos PDFs que você possui conhecimento, se não, mande uma mensagem dizendo que você não consegue ajudar. Prompt: {prompt}")
+            response = self.run(f"{prompt}")
             return str(response.content)
         except Exception as e:
             print(f"[ERRO] {e} -> tentando próximo modelo...")
