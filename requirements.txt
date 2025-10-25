@@ -2,3 +2,4 @@ flask
 dotenv
 agno
 groq
+pyjwt
